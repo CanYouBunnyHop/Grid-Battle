@@ -79,7 +79,7 @@ public abstract class Unit : MonoBehaviour
     }
     public void EnqueueFollowPath()
     {
-        if(targetCells.Any())
+        if(targetCells.Any() || ChaseTarget!=null)
         {
             Debug.Log("start follow");
             followReq.Enqueue(FollowPath(pathFindCells));
