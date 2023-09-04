@@ -61,7 +61,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
             var allSum = _conflitingUnits.Select(u => u.RangeUsedSum);
             var lowestRangeUsed = _conflitingUnits.Where(u => u.RangeUsedSum <= allSum.Min()).ToList();
 
-            Unit winner = lowestRangeUsed.Count() == 1 ? lowestRangeUsed[0] : null;
+            Unit winner = lowestRangeUsed.Count() == 1 ? lowestRangeUsed[0] : null; //Chaser will always lose
 
             foreach(Unit u in _conflitingUnits)
             {

@@ -67,26 +67,27 @@ public class PhaseState_Move : PhaseState
     {
         Debug.Log("run");
 
-        //calc chase / calc target destination for units with chase input
-        var unitsWithChase = from u in _phaseManager.units where u.ChaseTarget is not null select u; 
-        foreach(Unit u in unitsWithChase)
-        {
-            Cell start = u.unitOnCell;
-            var end = new List<Cell>(){u.ChaseTarget.TargetDestination()};
-            PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
+        //calc chase / calc target destination for units with chase input 
+        //because pathreq doesn't calculate on the same frame, this has to be in choice state
+        // var unitsWithChase = from u in _phaseManager.units where u.ChaseTarget is not null select u; 
+        // foreach(Unit u in unitsWithChase)
+        // {
+        //     Cell start = u.unitOnCell;
+        //     var end = new List<Cell>(){u.ChaseTarget.TargetDestination()};
+        //     PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
 
-            void OnPathFound(Cell[] _newPath, bool _pathSuccess)
-            {
-                //Shave off the cells that are out of movement range
-                var path = _newPath.ToList();
-                var chasePath = path.Intersect(u.inMovementRangeCells);
-                u.pathFindCells = chasePath.ToList();
+        //     void OnPathFound(Cell[] _newPath, bool _pathSuccess)
+        //     {
+        //         //Shave off the cells that are out of movement range
+        //         var path = _newPath.ToList();
+        //         var chasePath = path.Intersect(u.inMovementRangeCells);
+        //         u.pathFindCells = chasePath.ToList();
 
-                Debug.Log("chase path found");
+        //         Debug.Log("chase path found");
 
-                //u.rangeUsed.Add(u.pathFindCells[u.pathFindCells.Count - 1].gCost);
-            }
-        }
+        //         //u.rangeUsed.Add(u.pathFindCells[u.pathFindCells.Count - 1].gCost);
+        //     }
+        // }
         
         //calc clash/ occupy
         IGrouping<Cell, Unit> FindAnyConflict()

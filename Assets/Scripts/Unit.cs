@@ -12,7 +12,7 @@ public abstract class Unit : MonoBehaviour
 
     public int movementMaxRange = 60;
     public List<int> rangeUsed = new List<int>();
-    public int RangeUsedSum => rangeUsed.Sum();
+    public int RangeUsedSum => rangeUsed.Any()? rangeUsed.Sum() : 0;
     public int MovementRangeLeft => movementMaxRange - RangeUsedSum;
 
     ///<summary> index of cell in path, Cell[] </summary>
@@ -27,7 +27,8 @@ public abstract class Unit : MonoBehaviour
     private GridManager Grid => GridManager.theGridManager;
     public Queue<IEnumerator> followReq = new();
     public List<Cell> pathFindCells = new();
-    public Cell TargetDestination() =>  pathFindCells.Any() ? pathFindCells.Last() : unitOnCell;
+    public Cell TargetDestination() => pathFindCells.Any() ? pathFindCells.Last() : unitOnCell;
+    
     public Unit ChaseTarget;
     
     public List<Vector3> pathFindV3 = new();
@@ -40,13 +41,50 @@ public abstract class Unit : MonoBehaviour
 
     protected virtual void OnMouseDown() //mouse down on unit
     {
-        Unit selectedPlayer = InputManager.SelectedPlayer;
-
-        if(selectedPlayer != this && selectedPlayer.targetCells.Any())
+        if(Input.GetKey(KeyCode.LeftShift))
         {
-            //player chase can only chase non-player
-            selectedPlayer.ChaseTarget = this;
-            //chase pathfindings calc in phasemanager before conflict calc
+            Unit selectedPlayer = InputManager.SelectedPlayer;
+            //selected unit is not this, and there is no targetcells
+            if(selectedPlayer != this && !selectedPlayer.targetCells.Any()) 
+            {
+                selectedPlayer.ChaseDownTarget(this);
+            }
+        }
+        
+    }
+    protected void ChaseDownTarget(Unit _target)
+    {
+        ChaseTarget = _target;
+        Cell start = unitOnCell;
+        var end = new List<Cell>(){ChaseTarget.TargetDestination()};
+        PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
+
+        void OnPathFound(Cell[] _newPath, bool _pathSuccess)
+        {
+            if(_pathSuccess)
+            {
+                //Shave off the cells that are out of movement range
+                var path = _newPath.ToList();
+                var chasePath = path.Intersect(inMovementRangeCells).ToList();
+
+                if(_target.ChaseTarget == this) //if chasing each other, meet in middle
+                {
+                    int x = chasePath.Count / 2;
+                    int i = chasePath.Count - x;
+                    chasePath.RemoveRange(i,x);
+                }
+                //If able track down target to destination, lose this encounter
+                else if(chasePath.Last() == _target.TargetDestination())
+                {
+                    chasePath.RemoveAt(chasePath.Count - 1);
+                }
+
+                pathFindCells = chasePath;
+
+                Debug.Log("chase path found");
+                rangeUsed.Add(pathFindCells[pathFindCells.Count - 1].gCost);
+            }
+            
         }
     }
     protected virtual void Update()
@@ -56,7 +94,8 @@ public abstract class Unit : MonoBehaviour
         //temp
         if(Input.GetKeyDown(KeyCode.Z))
         {
-            CheckInMovementRange();
+            if(ChaseTarget!=null)
+            ChaseDownTarget(ChaseTarget);
         }
 
         //If there is path to follow and all pathfind algorithm has finished processing
@@ -75,11 +114,13 @@ public abstract class Unit : MonoBehaviour
         pathFindV3.Clear();
         pathFindCells.Clear();
         rangeUsed.Clear();
+
+        ChaseTarget = null;
         ToggleOverlay(false);
     }
     public void EnqueueFollowPath()
     {
-        if(targetCells.Any() || ChaseTarget!=null)
+        if(pathFindCells.Any())
         {
             Debug.Log("start follow");
             followReq.Enqueue(FollowPath(pathFindCells));
