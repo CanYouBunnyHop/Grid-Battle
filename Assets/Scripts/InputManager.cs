@@ -18,12 +18,12 @@ public class InputManager : MonoBehaviour
         {
             if(SelectedPlayer == null) return;
 
-            if(SelectedPlayer.targetCells.Count > 0)
+            if(SelectedPlayer.targetCells.Count > 0 || SelectedPlayer.ChaseTarget != null)
             {
                 SelectedPlayer.ClearAllInputs();
-                SelectedPlayer.CheckInMovementRange();
+                SelectedPlayer.CheckInMovementRange(true);
             }
-            else if (SelectedPlayer.targetCells.Count == 0)
+            else if (SelectedPlayer.targetCells.Count == 0 || SelectedPlayer.ChaseTarget == null)
             {
                 SelectedPlayer.ToggleOverlay(false);
                 SelectedPlayer = null;

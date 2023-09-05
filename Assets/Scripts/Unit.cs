@@ -17,17 +17,27 @@ public abstract class Unit : MonoBehaviour
 
     ///<summary> index of cell in path, Cell[] </summary>
     [SerializeField]int targetIndex;
-    public Cell unitOnCell;
-    public List<Cell> targetCells;
+    public Cell UnitOnCell() 
+    {
+        if(Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1, cellLayer))
+        return hit.collider.GetComponent<Cell>();
+        
+        else return null;
+    } 
+    public List<Cell> targetCells = new();
     private HashSet<Cell> inSquareRangeCells = new();
     private HashSet<Cell> inRangeCells = new();
-    public HashSet<Cell> inMovementRangeCells = new();
+    public HashSet<Cell> inMovementRangeCells = new(); //=> targetCells.Any()? newInMovementRangeCells : defaultInMovementRangeCells;
+    //public HashSet<Cell> defaultInMovementRangeCells = new();
+    //public HashSet<Cell> newInMovementRangeCells = new();
     public LayerMask cellLayer;
     private InputManager InputManager => InputManager.theInputManager;
     private GridManager Grid => GridManager.theGridManager;
     public Queue<IEnumerator> followReq = new();
     public List<Cell> pathFindCells = new();
-    public Cell TargetDestination() => pathFindCells.Any() ? pathFindCells.Last() : unitOnCell;
+
+    //public bool isProcessingCells;
+    public Cell TargetDestination() => pathFindCells.Any() ? pathFindCells.Last() : UnitOnCell();
     
     public Unit ChaseTarget;
     
@@ -39,7 +49,14 @@ public abstract class Unit : MonoBehaviour
     public Tilemap tilemap;
     public TileBase overlay;
 
-    protected virtual void OnMouseDown() //mouse down on unit
+    public virtual void OnMouseDown() //mouse down on unit
+    {
+        if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
+        {
+           IsSelectedAsChaseTarget();
+        }
+    }
+    protected void IsSelectedAsChaseTarget()
     {
         if(Input.GetKey(KeyCode.LeftShift))
         {
@@ -47,16 +64,15 @@ public abstract class Unit : MonoBehaviour
             //selected unit is not this, and there is no targetcells
             if(selectedPlayer != this && !selectedPlayer.targetCells.Any()) 
             {
-                selectedPlayer.ChaseDownTarget(this);
+                selectedPlayer.ChaseTarget = this;
             }
         }
-        
     }
-    protected void ChaseDownTarget(Unit _target)
+    public void ChaseDownTarget()
     {
-        ChaseTarget = _target;
-        Cell start = unitOnCell;
-        var end = new List<Cell>(){ChaseTarget.TargetDestination()};
+        Cell start = UnitOnCell();
+        var endCell = ChaseTarget.ChaseTarget == this? ChaseTarget.UnitOnCell() : ChaseTarget.TargetDestination(); 
+        var end = new List<Cell>(){endCell};
         PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
 
         void OnPathFound(Cell[] _newPath, bool _pathSuccess)
@@ -65,16 +81,19 @@ public abstract class Unit : MonoBehaviour
             {
                 //Shave off the cells that are out of movement range
                 var path = _newPath.ToList();
-                var chasePath = path.Intersect(inMovementRangeCells).ToList();
 
-                if(_target.ChaseTarget == this) //if chasing each other, meet in middle
+                //if chasing each other, meet in middle, cut list by half, rounding down if odd number (Clash)
+                if(ChaseTarget.ChaseTarget == this) 
                 {
-                    int x = chasePath.Count / 2;
-                    int i = chasePath.Count - x;
-                    chasePath.RemoveRange(i,x);
+                    int x = path.Count / 2;
+                    int i = path.Count - x;
+                    path.RemoveRange(i,x);
                 }
+                //get the elements appear in both lists
+                var chasePath = path.Intersect(inMovementRangeCells).ToList(); 
+                
                 //If able track down target to destination, lose this encounter
-                else if(chasePath.Last() == _target.TargetDestination())
+                if(chasePath[chasePath.Count - 1] == endCell)
                 {
                     chasePath.RemoveAt(chasePath.Count - 1);
                 }
@@ -89,13 +108,13 @@ public abstract class Unit : MonoBehaviour
     }
     protected virtual void Update()
     {
-        Debug.Log($"{gameObject.name}"+ followReq.Count);
+        Debug.Log($"{gameObject.name}:"+ inRangeCells.Count);
        
         //temp
         if(Input.GetKeyDown(KeyCode.Z))
         {
-            if(ChaseTarget!=null)
-            ChaseDownTarget(ChaseTarget);
+            if(ChaseTarget!=null && InputManager.SelectedPlayer == this)
+            ChaseDownTarget();
         }
 
         //If there is path to follow and all pathfind algorithm has finished processing
@@ -103,8 +122,8 @@ public abstract class Unit : MonoBehaviour
         StartCoroutine(StartFollowPath());
 
         //get current cell unit is standing
-        if(Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1, cellLayer))
-        unitOnCell = hit.collider.GetComponent<Cell>();
+        // if(Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1, cellLayer))
+        // unitOnCell = hit.collider.GetComponent<Cell>();
 
         DrawLineRndr();
     }
@@ -131,6 +150,7 @@ public abstract class Unit : MonoBehaviour
         if(_enable)
         {
             tilemap.ClearAllTiles();
+
             foreach(var c in inMovementRangeCells)
             {
                 tilemap.SetTile(c.TileMapTilePos(), overlay);
@@ -144,18 +164,19 @@ public abstract class Unit : MonoBehaviour
 
     public void GetInRangeCells()
     {
+        Debug.Log("Get InRangeCells");
         //draw square around unit's grid
         inRangeCells.Clear();
         inSquareRangeCells.Clear();
 
         //temporary solution, will break if player is able to back track to unitoncell
-        unitOnCell.gCost = 0;
-        unitOnCell.hCost = 0;
+        UnitOnCell().gCost = 0;
+        UnitOnCell().hCost = 0;
 
         int minX, maxX, minY, maxY;
         int dist = Mathf.RoundToInt(MovementRangeLeft/10);
 
-        Cell start = targetCells.Count > 0? targetCells.Last() : unitOnCell;
+        Cell start = targetCells.Count > 0? targetCells.Last() : UnitOnCell();
 
         minX = start.coord.x - dist;
         maxX = start.coord.x + dist;
@@ -186,11 +207,12 @@ public abstract class Unit : MonoBehaviour
             }
         }
     }
-    public void CheckInMovementRange()
+    public void CheckInMovementRange(bool _EnableOverlay)
     {
         int cost;
         inMovementRangeCells.Clear();
         tilemap.ClearAllTiles();
+
         GetInRangeCells();
 
         foreach(Cell c in inRangeCells)
@@ -198,7 +220,7 @@ public abstract class Unit : MonoBehaviour
             cost = 1000 + movementMaxRange; //if pathfind failed, at least the cost would be too high to move to
             List<Cell> cs = new List<Cell>(){c};
 
-            Cell _start = targetCells.Count > 0? targetCells.Last() : unitOnCell; //pathfind from target cell to current in range cell
+            Cell _start = targetCells.Count > 0? targetCells.Last() : UnitOnCell(); //pathfind from target cell to current in range cell
             PathRequestManager.thePathReqManager.RequestPathFindings(_start, cs, AddToHashset); //makes sure the cell is reachable if there is obstacles
         }
 
@@ -212,10 +234,12 @@ public abstract class Unit : MonoBehaviour
                 if(cost <= MovementRangeLeft)
                 {
                    inMovementRangeCells.Add(lastCell);
+
                    //overlay
+                   if(_EnableOverlay)
                    tilemap.SetTile(lastCell.TileMapTilePos(), overlay);
                 }
-               
+
                 foreach(var c in inRangeCells)
                 {
                     c.gCost = 0;
@@ -241,7 +265,6 @@ public abstract class Unit : MonoBehaviour
         {
             targetIndex = 0;
             yield return followReq.Dequeue();
-            Debug.Log("DEQ follow");
         }
         isFollowing = false;
     }

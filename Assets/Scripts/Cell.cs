@@ -83,11 +83,12 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
      private void OnMouseDown()
     {
         var SelectedPlayer = Input.SelectedPlayer;
+
         if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer) && PathReqManager.AlreadyFinishedProcessing())
         {
             var targetCells = SelectedPlayer.targetCells;
 
-            if(SelectedPlayer.unitOnCell == this) return;
+            if(SelectedPlayer.UnitOnCell() == this) return;
 
             if(targetCells.Count > 0 && targetCells[targetCells.Count-1] == this) //return if this cell is the last target
             return;
@@ -99,7 +100,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
 
             if(targetCells.Count == 1)
             {
-                PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.unitOnCell, targetCells, OnPathFound);
+                PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), targetCells, OnPathFound);
             }
             else if(SelectedPlayer.targetCells.Count > 1)
             {
@@ -109,7 +110,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
                 PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
             }
            
-            SelectedPlayer.CheckInMovementRange();
+            SelectedPlayer.CheckInMovementRange(true);
         }
          void OnPathFound(Cell[] _newPath, bool _pathSuccess)
         {
@@ -135,14 +136,10 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
     
     public bool IsWithinRangeWithUnit(Unit _inspectedUnit) //OPTIMISE
     {
-        if(Input != null && Input.SelectedPlayer != null)
-        {
-            List<Cell> targetCells = Input.SelectedPlayer.targetCells;
-            Cell _start = targetCells.Count > 0? targetCells[targetCells.Count -1] : Input.SelectedPlayer.unitOnCell;
-
-            return PathReqManager.pathFind.GetDistance(_start, this) <= _inspectedUnit.MovementRangeLeft;
-        }
-        return false;
+        List<Cell> targetCells = _inspectedUnit.targetCells;
+            
+        Cell startCell = targetCells.Count > 0? targetCells[targetCells.Count -1] : _inspectedUnit.UnitOnCell();
+        return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.MovementRangeLeft;
     } 
     public bool IsWithinMovementRange(Unit _inspectedUnit)
     {

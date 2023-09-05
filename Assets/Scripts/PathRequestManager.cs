@@ -10,6 +10,7 @@ public class PathRequestManager : MonoBehaviour
     public static PathRequestManager thePathReqManager;
     public PathFind pathFind;
     bool isProcessing;
+    public bool IsProcessing => isProcessing;
     [SerializeField]int stepsAfterFinishProcessing;
     private void Awake()
     {

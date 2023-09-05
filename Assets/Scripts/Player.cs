@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 public class Player : Unit
 {
@@ -13,12 +14,19 @@ public class Player : Unit
     {
         base.Update();
     }
-    protected override void OnMouseDown()
+    public override void OnMouseDown()
     {
         if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         {
-            InputManager.theInputManager.SelectedPlayer = this;
-            CheckInMovementRange();  
+            if(Input.GetKey(KeyCode.LeftShift))
+            {
+                IsSelectedAsChaseTarget();
+            } 
+            else
+            {
+                InputManager.theInputManager.SelectedPlayer = this;
+                CheckInMovementRange(true);
+            }
         }
     }
     protected override IEnumerator FollowPath(List<Cell> _path)

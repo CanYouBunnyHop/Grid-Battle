@@ -5,19 +5,24 @@ using System.Linq;
 
 public class PhaseManager : MonoBehaviour
 {
-    public List<PhaseState> phaseOrder = new()
-    {
-        new PhaseState_Choice(),
-        new PhaseState_Move()
-    };
+    public List<PhaseState> phaseOrder = new();
     public PhaseState currentPhase => phaseOrder[curPhaseIndex];
     public int curPhaseIndex = 0;
-    //public static PhaseManager thePhaseManager;
     public List<Unit> units = new();
     void Awake()
     {
+        curPhaseIndex = 0;
+        phaseOrder = new()
+        {
+            //new PhaseState_GetDefaultInMovementRangeCells(),
+            new PhaseState_Choice(),
+
+            new PhaseState_Chase(),
+            new PhaseState_Move()
+        };
+
         units = FindObjectsByType<Unit>(FindObjectsSortMode.None).ToList();
-        //thePhaseManager = this;
+
         currentPhase.EnterPhase(this);
     }
     void Start()
@@ -27,6 +32,7 @@ public class PhaseManager : MonoBehaviour
     void Update()
     {
         currentPhase.DuringPhase(this);
+        Debug.Log(currentPhase);
     }
 
     public void NextPhase()
@@ -46,6 +52,17 @@ public abstract class PhaseState
         _phaseManager.NextPhase();
     }
 }
+public class PhaseState_GetDefaultInMovementRangeCells : PhaseState
+{
+    public override void EnterPhase(PhaseManager _phaseManager)
+    {
+       
+    }
+    public override void DuringPhase(PhaseManager _phaseManager)
+    {
+        
+    }
+}
 public class PhaseState_Choice : PhaseState
 {
     public override void EnterPhase(PhaseManager _phaseManager)
@@ -53,12 +70,34 @@ public class PhaseState_Choice : PhaseState
         InputManager.theInputManager.SelectedPlayer = null;
         foreach(Unit u in _phaseManager.units)
         {
+            Debug.Log("Enter + foreach");
             u.ClearAllInputs();
+            u.CheckInMovementRange(false);
+            
         }
     }
     public override void DuringPhase(PhaseManager _phaseManager)
     {
         InputManager.theInputManager.RightClicking();
+    }
+}
+public class PhaseState_Chase: PhaseState
+{
+    public override void EnterPhase(PhaseManager _phaseManager)
+    {
+        foreach(Unit u in _phaseManager.units)
+        {
+            if(u.ChaseTarget!=null)
+            {
+                u.ChaseDownTarget(); //path find chase
+            }
+        }
+    }
+
+    public override void DuringPhase(PhaseManager _phaseManager)
+    {
+        if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
+        ExitPhase(_phaseManager);
     }
 }
 public class PhaseState_Move : PhaseState
@@ -130,17 +169,5 @@ public class PhaseState_Move : PhaseState
         {
             ExitPhase(_phaseManager);
         }
-    }
-}
-public class PhaseState_Chase : PhaseState //move this back into move, calc chase b4 conflict,
-{
-    public override void EnterPhase(PhaseManager _phaseManager)
-    {
-        
-        
-    }
-    public override void DuringPhase(PhaseManager _phaseManager)
-    {
-       
     }
 }
