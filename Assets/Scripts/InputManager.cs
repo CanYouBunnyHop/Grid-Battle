@@ -29,5 +29,13 @@ public class InputManager : MonoBehaviour
                 SelectedPlayer = null;
             }
         }
+
+        if(Input.GetKeyDown(KeyCode.C))
+        {
+            foreach(var c in SelectedPlayer.inMovementRangeCells)
+            {
+                Debug.Log(c);
+            }
+        }
     }
 }

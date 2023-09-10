@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using System;
+using TreeEditor;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -27,20 +29,47 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
     private InputManager Input => InputManager.theInputManager;
     private PathRequestManager PathReqManager => PathRequestManager.thePathReqManager;
     private MeshRenderer MeshRdr => GetComponent<MeshRenderer>();
+    /// <summary>
+    /// [0 = top left],
+    /// [1 = top],
+    /// [2 = top right],
+    /// [3 = left],
+    /// [4 = right],
+    /// [5 = bot left],
+    /// [6 = bot],
+    /// [7 = bot right]
+    /// </summary>
 
-    public List<Unit> conflictingUnits = new List<Unit>();
-    public bool solved = false;
-
-
-
-    private MaterialPropertyBlock mpb;
-    public MaterialPropertyBlock Mpb
+    public List<bool> coverPosCheck;
+    // private MaterialPropertyBlock mpb;
+    // public MaterialPropertyBlock Mpb
+    // {
+    //     get
+    //     {
+    //         if(mpb == null) mpb = new MaterialPropertyBlock();
+    //         return mpb;
+    //     }
+    // }
+    private void Start()
     {
-        get
+        coverPosCheck = new()
         {
-            if(mpb == null) mpb = new MaterialPropertyBlock();
-            return mpb;
-        }
+            CoverRayCastCheck(new Vector3(-1, 0, 1)),
+            CoverRayCastCheck(new Vector3(0, 0, 1)),
+            CoverRayCastCheck(new Vector3(1, 0, 1)),
+            CoverRayCastCheck(new Vector3(-1, 0, 0)),
+            CoverRayCastCheck(new Vector3(1, 0, 0)),
+            CoverRayCastCheck(new Vector3(-1, 0, -1)),
+            CoverRayCastCheck(new Vector3(0, 0, -1)),
+            CoverRayCastCheck(new Vector3(1, 0, -1)),
+        };
+    }
+    private bool CoverRayCastCheck(Vector3 _offserDir)
+    {
+        Vector3 offsetOrigin = _offserDir * Grid.cellSize/2 + transform.position;
+        Ray ray = new Ray(offsetOrigin, Vector3.up);
+
+        return Physics.Raycast(ray, 1, Grid.coverLayerMask);
     }
     
     public int CompareTo(Cell _cellToCompare)
@@ -67,40 +96,32 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
             {
                 if(u != winner)
                 {
-                    //var reversedQ = winner.pathFindCells1D.Reverse();
                     //remove last cell on pathFindCells
                     u.pathFindCells.RemoveAt(u.pathFindCells.Count - 1);
-                    // if(u.pathFindCells1D.Last().solved) //need loop here
-                    // {
-
-                    // }
                 }
             }
-            //solved = true;
         }
     }
    
      private void OnMouseDown()
     {
         var SelectedPlayer = Input.SelectedPlayer;
+        
 
         if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer) && PathReqManager.AlreadyFinishedProcessing())
         {
-            var targetCells = SelectedPlayer.targetCells;
-
             if(SelectedPlayer.UnitOnCell() == this) return;
-
-            if(targetCells.Count > 0 && targetCells[targetCells.Count-1] == this) //return if this cell is the last target
-            return;
+            if(SelectedPlayer.ChaseTarget != null) return; //if selected player has a chase target, dont add this cell
+            var targetCells = SelectedPlayer.targetCells;
+            if(targetCells.Count > 0 && targetCells[targetCells.Count-1] == this) return; //return if this cell is the last target
             
             targetCells.Add(this);
-
-            //update line render here, draw line is in unit
-            SelectedPlayer.lineRdr.enabled = true;
+            //SelectedPlayer.CheckInMovementRange(true);
 
             if(targetCells.Count == 1)
             {
                 PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), targetCells, OnPathFound);
+                //SelectedPlayer.CheckInMovementRange(true);
             }
             else if(SelectedPlayer.targetCells.Count > 1)
             {
@@ -108,19 +129,31 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
                 Cell start = targetCells[targetCells.Count - 2];
 
                 PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
+                //SelectedPlayer.CheckInMovementRange(true);
             }
-           
-            SelectedPlayer.CheckInMovementRange(true);
+           // SelectedPlayer.CheckInMovementRange(true);
         }
-         void OnPathFound(Cell[] _newPath, bool _pathSuccess)
+        void OnPathFound(Cell[] _newPath, bool _pathSuccess)
         {
             if(_pathSuccess)
             {
-                Input.SelectedPlayer.pathFindV3.AddRange(CellsToWorldPos(_newPath)); //for line renderer
-                Input.SelectedPlayer.pathFindCells.AddRange(_newPath); //for follow requests
-                Input.SelectedPlayer.rangeUsed.Add(_newPath[_newPath.Length - 1].gCost); //add move range used
+                SelectedPlayer.pathFindV3.AddRange(CellsToWorldPos(_newPath)); //for line renderer
+                SelectedPlayer.pathFindCells.AddRange(_newPath); //for follow requests
+                SelectedPlayer.rangeUsed.Add(_newPath[_newPath.Length - 1].gCost); //add move range used
+                SelectedPlayer.CheckInMovementRange(true);
             }
+            else
+            {
+                if(SelectedPlayer.targetCells.Any())
+                SelectedPlayer.targetCells.Remove(SelectedPlayer.targetCells.Last());
+            }
+            //Invoke(nameof(ForInvoke), 0.3f); //It's not this timing that causes bug
+            
         }
+    }
+    public void ForInvoke()
+    {
+        Input.SelectedPlayer.CheckInMovementRange(true);
     }
     private void OnMouseEnter()
     {
@@ -147,22 +180,15 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         else return false;
     }
     
-    public void SetCellColor(Color _color)
-    {
-        //TryGetComponent<MeshRenderer>(out MeshRenderer meshRenderer);
-        Mpb.SetColor("_BaseColor", _color);
-        MeshRdr.SetPropertyBlock(Mpb);
-    }
+    // public void SetCellColor(Color _color)
+    // {
+    //     //TryGetComponent<MeshRenderer>(out MeshRenderer meshRenderer);
+    //     Mpb.SetColor("_BaseColor", _color);
+    //     MeshRdr.SetPropertyBlock(Mpb);
+    // }
     private void Update()
     {
         UpdateTileTypeVisual();
-
-        //temp
-        // if(UnityEngine.Input.GetKeyDown(KeyCode.X))
-        // {
-        //     gCost = 0;
-        //     hCost = 0;
-        // }
     }
     private void UpdateTileTypeVisual()
     {
@@ -170,7 +196,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         wallObj.SetActive(tileType is TileType.Wall);
     }
     public Vector3 ToWorldPos() => this.gameObject.transform.position + Vector3.up * Grid.cellSize/2;
-    public Vector3[] CellsToWorldPos(Cell[] _cells)
+    private Vector3[] CellsToWorldPos(Cell[] _cells)
     {
         Vector3[] v = new Vector3[_cells.Length];
         for(int i = 0; i < _cells.Length; i++)

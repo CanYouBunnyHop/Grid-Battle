@@ -9,11 +9,12 @@ public class PathRequestManager : MonoBehaviour
     PathRequest curPathReq;
     public static PathRequestManager thePathReqManager;
     public PathFind pathFind;
-    bool isProcessing;
+    [SerializeField]bool isProcessing = false;
     public bool IsProcessing => isProcessing;
     [SerializeField]int stepsAfterFinishProcessing;
     private void Awake()
     {
+        //isProcessing = false;
         thePathReqManager = this;
         pathFind = GetComponent<PathFind>();
     }
@@ -22,7 +23,6 @@ public class PathRequestManager : MonoBehaviour
         PathRequest newReq = new PathRequest(_start, _end, _callback);
         thePathReqManager.pathReqQueue.Enqueue(newReq);
 
-        if(!isProcessing)
         thePathReqManager.TryProcessNext();
     }
     void TryProcessNext()
@@ -30,20 +30,20 @@ public class PathRequestManager : MonoBehaviour
         if(!isProcessing && pathReqQueue.Count > 0)
         {
             curPathReq = pathReqQueue.Dequeue();
-            isProcessing = true;
             IEnumerator c = pathFind.StartFindPath(curPathReq.pathStart, curPathReq.targets);
-            StartCoroutine(c); 
+            StartCoroutine(c);
+            isProcessing = true;
         }
     }
     public void FinishedProcessingPath(Cell[] _path, bool _success)
     {
         try
         {
-            curPathReq.callback(_path, _success);
             isProcessing = false;
+            curPathReq.callback(_path, _success);
             TryProcessNext();
         }
-        catch(NullReferenceException){Debug.Log(_success);}
+        catch(NullReferenceException){Debug.Log("Finish Null Error");}
     }
     struct PathRequest
     {

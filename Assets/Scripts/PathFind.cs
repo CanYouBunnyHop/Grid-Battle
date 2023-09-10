@@ -29,7 +29,6 @@ public class PathFind : MonoBehaviour
         HashSet<Cell> closeSet = new HashSet<Cell>(); //hashSet is list with no duplicates
         openSet.Add(_start);
     
-
         while(openSet.Count > 0)
         {
             Cell curCell = openSet.RemoveFirst();

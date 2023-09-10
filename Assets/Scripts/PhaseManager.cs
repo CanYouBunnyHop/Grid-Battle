@@ -32,7 +32,7 @@ public class PhaseManager : MonoBehaviour
     void Update()
     {
         currentPhase.DuringPhase(this);
-        Debug.Log(currentPhase);
+        //Debug.Log(currentPhase);
     }
 
     public void NextPhase()

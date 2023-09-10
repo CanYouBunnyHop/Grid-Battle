@@ -12,6 +12,7 @@ public class GridManager : MonoBehaviour
     public IntVector2 gridDimention;
     public int gridSize => gridDimention.x * gridDimention.y;
     public Dictionary<IntVector2, Cell> cellDic;
+    public LayerMask coverLayerMask;
     
     [Header("Gizmo")]
     public bool drawGridGizmo;
