@@ -18,9 +18,9 @@ public class PathRequestManager : MonoBehaviour
         thePathReqManager = this;
         pathFind = GetComponent<PathFind>();
     }
-    public void RequestPathFindings(Cell _start, List<Cell> _end, Action<Cell[], bool> _callback)
+    public void RequestPathFindings(Cell _start, List<Cell> _end, bool _isAirbourne, bool _dash, Action<Cell[], bool> _callback)
     {
-        PathRequest newReq = new PathRequest(_start, _end, _callback);
+        PathRequest newReq = new PathRequest(_start, _end, _isAirbourne, _dash, _callback);
         thePathReqManager.pathReqQueue.Enqueue(newReq);
 
         thePathReqManager.TryProcessNext();
@@ -30,7 +30,7 @@ public class PathRequestManager : MonoBehaviour
         if(!isProcessing && pathReqQueue.Count > 0)
         {
             curPathReq = pathReqQueue.Dequeue();
-            IEnumerator c = pathFind.StartFindPath(curPathReq.pathStart, curPathReq.targets);
+            IEnumerator c = pathFind.StartFindPath(curPathReq.pathStart, curPathReq.targets, curPathReq.isAirbourne, curPathReq.isDash);
             StartCoroutine(c);
             isProcessing = true;
         }
@@ -49,12 +49,16 @@ public class PathRequestManager : MonoBehaviour
     {
         public Cell pathStart;
         public List<Cell> targets;
+        public bool isAirbourne;
+        public bool isDash;
         public Action<Cell[], bool> callback;
 
-        public PathRequest(Cell _start, List<Cell> _targets, Action<Cell[], bool> _callback)
+        public PathRequest(Cell _start, List<Cell> _targets, bool _isAirbourne, bool _isDash, Action<Cell[], bool> _callback)
         {
             pathStart = _start;
             targets = _targets;
+            isAirbourne = _isAirbourne;
+            isDash = _isDash;
             callback = _callback;
         }
     }

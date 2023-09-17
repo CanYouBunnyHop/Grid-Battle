@@ -2,8 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using System;
-using TreeEditor;
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -40,7 +39,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
     /// [7 = bot right]
     /// </summary>
 
-    public List<bool> coverPosCheck;
+    public List<bool> coverPosCheck = new();
     // private MaterialPropertyBlock mpb;
     // public MaterialPropertyBlock Mpb
     // {
@@ -50,27 +49,42 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
     //         return mpb;
     //     }
     // }
-    private void Start()
+    // public void SetCellColor(Color _color)
+    // {
+    //     //TryGetComponent<MeshRenderer>(out MeshRenderer meshRenderer);
+    //     Mpb.SetColor("_BaseColor", _color);
+    //     MeshRdr.SetPropertyBlock(Mpb);
+    // }
+    public bool HasUnitOnCell()
     {
-        coverPosCheck = new()
+        var listUnitsOnCell = from u in PhaseManager.phaseManager.units where u.UnitOnCell() == this select u.UnitOnCell();
+        return listUnitsOnCell.Contains(this);
+    }
+    private void Start() //grid manager is null during execute always
+    {
+        bool CoverRayCastCheck(Vector3 _offserDir)
         {
-            CoverRayCastCheck(new Vector3(-1, 0, 1)),
-            CoverRayCastCheck(new Vector3(0, 0, 1)),
-            CoverRayCastCheck(new Vector3(1, 0, 1)),
-            CoverRayCastCheck(new Vector3(-1, 0, 0)),
-            CoverRayCastCheck(new Vector3(1, 0, 0)),
-            CoverRayCastCheck(new Vector3(-1, 0, -1)),
-            CoverRayCastCheck(new Vector3(0, 0, -1)),
-            CoverRayCastCheck(new Vector3(1, 0, -1)),
-        };
-    }
-    private bool CoverRayCastCheck(Vector3 _offserDir)
-    {
-        Vector3 offsetOrigin = _offserDir * Grid.cellSize/2 + transform.position;
-        Ray ray = new Ray(offsetOrigin, Vector3.up);
+            Vector3 offsetOrigin = _offserDir * Grid.cellSize/2 + transform.position;
+            Ray ray = new Ray(offsetOrigin, Vector3.up);
 
-        return Physics.Raycast(ray, 1, Grid.coverLayerMask);
+            return Physics.Raycast(ray, 1, Grid.coverLayerMask);
+        }
+        if(Application.isPlaying)
+        {
+            coverPosCheck = new()
+            {
+                CoverRayCastCheck(new Vector3(-1, 0, 1)),
+                CoverRayCastCheck(new Vector3(0, 0, 1)),
+                CoverRayCastCheck(new Vector3(1, 0, 1)),
+                CoverRayCastCheck(new Vector3(-1, 0, 0)),
+                CoverRayCastCheck(new Vector3(1, 0, 0)),
+                CoverRayCastCheck(new Vector3(-1, 0, -1)),
+                CoverRayCastCheck(new Vector3(0, 0, -1)),
+                CoverRayCastCheck(new Vector3(1, 0, -1)),
+            };
+        }
     }
+    
     
     public int CompareTo(Cell _cellToCompare)
     {
@@ -103,57 +117,86 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         }
     }
    
-     private void OnMouseDown()
+    private void OnMouseDown()
+    {
+        ChoiceModeStateMachine();
+    }
+    private void ChoiceModeStateMachine()
     {
         var SelectedPlayer = Input.SelectedPlayer;
-        
-
-        if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer) && PathReqManager.AlreadyFinishedProcessing())
+        switch(Input.currentChoiceMode)
         {
-            if(SelectedPlayer.UnitOnCell() == this) return;
-            if(SelectedPlayer.ChaseTarget != null) return; //if selected player has a chase target, dont add this cell
-            var targetCells = SelectedPlayer.targetCells;
-            if(targetCells.Count > 0 && targetCells[targetCells.Count-1] == this) return; //return if this cell is the last target
-            
-            targetCells.Add(this);
-            //SelectedPlayer.CheckInMovementRange(true);
+            case InputManager.ChoiceMode.move:
+                if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer) && PathReqManager.AlreadyFinishedProcessing())
+                {
+                    if(SelectedPlayer.UnitOnCell() == this) return;
+                    if(SelectedPlayer.ChaseTarget != null) return; //if selected player has a chase target, dont add this cell
+                    if(SelectedPlayer.dashTarget != null)return;
 
-            if(targetCells.Count == 1)
-            {
-                PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), targetCells, OnPathFound);
-                //SelectedPlayer.CheckInMovementRange(true);
-            }
-            else if(SelectedPlayer.targetCells.Count > 1)
-            {
-                List<Cell> end = new List<Cell>(){targetCells[targetCells.Count - 1]};
-                Cell start = targetCells[targetCells.Count - 2];
+                    var targetCells = SelectedPlayer.targetCells;
 
-                PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
-                //SelectedPlayer.CheckInMovementRange(true);
+                    if(targetCells.Count > 0 && targetCells[targetCells.Count-1] == this) return; //return if this cell is the last target
+                    targetCells.Add(this);
+
+                    if(targetCells.Count == 1)
+                    {
+                        PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), targetCells, false, false, OnPathFound);
+                    }
+                    else if(SelectedPlayer.targetCells.Count > 1)
+                    {
+                        List<Cell> end = new List<Cell>(){targetCells[targetCells.Count - 1]};
+                        Cell start = targetCells[targetCells.Count - 2];
+
+                        PathRequestManager.thePathReqManager.RequestPathFindings(start, end, false, false, OnPathFound);
+                    }
+                }
+                
+            break;
+
+            case InputManager.ChoiceMode.chase:
+            break;
+
+            case InputManager.ChoiceMode.dash:
+            if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer, true) && PathReqManager.AlreadyFinishedProcessing())
+            {
+                if(SelectedPlayer.ChaseTarget != null) SelectedPlayer.ChaseTarget = null;
+                if(SelectedPlayer.dashTarget == this) return;
+
+                SelectedPlayer.dashTarget = this;
+                List<Cell> end = new(){SelectedPlayer.dashTarget};
+                PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), end, SelectedPlayer.isAirbourne, true, OnDashPathFound);
             }
-           // SelectedPlayer.CheckInMovementRange(true);
+            break;
         }
         void OnPathFound(Cell[] _newPath, bool _pathSuccess)
         {
             if(_pathSuccess)
             {
+
                 SelectedPlayer.pathFindV3.AddRange(CellsToWorldPos(_newPath)); //for line renderer
                 SelectedPlayer.pathFindCells.AddRange(_newPath); //for follow requests
                 SelectedPlayer.rangeUsed.Add(_newPath[_newPath.Length - 1].gCost); //add move range used
+
                 SelectedPlayer.CheckInMovementRange(true);
             }
             else
             {
+                Debug.Log("Path Not Found Bug Here");
                 if(SelectedPlayer.targetCells.Any())
                 SelectedPlayer.targetCells.Remove(SelectedPlayer.targetCells.Last());
             }
-            //Invoke(nameof(ForInvoke), 0.3f); //It's not this timing that causes bug
-            
         }
-    }
-    public void ForInvoke()
-    {
-        Input.SelectedPlayer.CheckInMovementRange(true);
+        void OnDashPathFound(Cell[] _newPath, bool _pathSuccess)
+        {
+            if(_pathSuccess)
+            {
+                SelectedPlayer.pathFindV3 = CellsToWorldPos(_newPath).ToList(); //for line renderer
+                SelectedPlayer.dashPathFindCells =_newPath.ToList(); //for follow requests
+                //SelectedPlayer.rangeUsed.Add(_newPath[_newPath.Length - 1].gCost); //add move range used
+
+                //SelectedPlayer.CheckInMovementRange(true);
+            }
+        }
     }
     private void OnMouseEnter()
     {
@@ -167,25 +210,29 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         Input.SelectedPlayer.lineRdr.enabled = false;
     }
     
-    public bool IsWithinRangeWithUnit(Unit _inspectedUnit) //OPTIMISE
+    public bool IsWithinRangeWithUnit(Unit _inspectedUnit, bool _dash = false)
     {
         List<Cell> targetCells = _inspectedUnit.targetCells;
-            
-        Cell startCell = targetCells.Count > 0? targetCells[targetCells.Count -1] : _inspectedUnit.UnitOnCell();
-        return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.MovementRangeLeft;
+        
+        Cell startCell;
+        if(_dash == false)
+        {
+            startCell = targetCells.Count > 0? targetCells[targetCells.Count -1] : _inspectedUnit.UnitOnCell();
+            return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.MovementRangeLeft;
+        }
+        else
+        {
+            startCell = _inspectedUnit.UnitOnCell();
+            return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.dashMaxRange;
+        }
     } 
-    public bool IsWithinMovementRange(Unit _inspectedUnit)
+    public bool IsWithinMovementRange(Unit _inspectedUnit, bool _dash = false)
     {
-        if(_inspectedUnit.inMovementRangeCells.Contains(this)) return true;
-        else return false;
+        if(!_dash) return _inspectedUnit.inMovementRangeCells.Contains(this);
+        else return _inspectedUnit.dashableCells.Contains(this);
     }
     
-    // public void SetCellColor(Color _color)
-    // {
-    //     //TryGetComponent<MeshRenderer>(out MeshRenderer meshRenderer);
-    //     Mpb.SetColor("_BaseColor", _color);
-    //     MeshRdr.SetPropertyBlock(Mpb);
-    // }
+   
     private void Update()
     {
         UpdateTileTypeVisual();

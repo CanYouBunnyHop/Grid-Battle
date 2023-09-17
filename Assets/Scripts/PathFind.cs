@@ -8,19 +8,19 @@ public class PathFind : MonoBehaviour
     PathRequestManager requestManager => PathRequestManager.thePathReqManager;
     private GridManager grid => GridManager.theGridManager;
     
-    public IEnumerator StartFindPath(Cell _start, List<Cell> _targets)
+    public IEnumerator StartFindPath(Cell _start, List<Cell> _targets, bool _isAirbourne, bool _dash)
     {
         for(int i = 0; i < _targets.Count;)
         {
             if(i == 0)
-            yield return StartCoroutine(FindPath(_start, _targets[i]));
+            yield return StartCoroutine(FindPath(_start, _targets[i], _isAirbourne, _dash));
 
             else if (i > 0)
-            yield return StartCoroutine(FindPath(_targets[i-1], _targets[i]));
+            yield return StartCoroutine(FindPath(_targets[i-1], _targets[i], _isAirbourne, _dash));
             i++;
         }
     }
-    public IEnumerator FindPath(Cell _start, Cell  _target)
+    public IEnumerator FindPath(Cell _start, Cell  _target, bool _isAirbourne, bool _dash) //add ignore wall and void later
     {
         Cell[] wayPoints = new Cell[0];
         bool pathSuccess = false;
@@ -43,7 +43,11 @@ public class PathFind : MonoBehaviour
 
             foreach(Cell neighbour in GridManager.theGridManager.GetNeighbourCells3x3(curCell))
             {
-                if(neighbour.tileType is Cell.TileType.Hole or Cell.TileType.Wall || closeSet.Contains(neighbour))
+                if(closeSet.Contains(neighbour))
+                continue;
+                if(!_isAirbourne && neighbour.tileType is Cell.TileType.Hole or Cell.TileType.Wall)
+                continue;
+                if(_dash && neighbour.HasUnitOnCell() && !_isAirbourne)//units will block ground dash, move wont
                 continue;
 
                 int newMoveCstToNeighbour = curCell.gCost + GetDistance(curCell, neighbour);

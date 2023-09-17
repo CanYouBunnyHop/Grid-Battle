@@ -3,15 +3,19 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using UnityEngine.Tilemaps;
-using System;
 
 public abstract class Unit : MonoBehaviour
 {
+    [Header("Gameplay Settings")]
+    public float maxHealth;
+    public float currentHealth;
+    
+    [Header("Follow Settings")]
     [SerializeField]float speed = 5;
     [SerializeField]public bool isFollowing = false;
 
     public int movementMaxRange = 60;
-    public List<int> rangeUsed = new List<int>();
+    public List<int> rangeUsed = new();
     public int RangeUsedSum => rangeUsed.Any()? rangeUsed.Sum() : 0;
     public int MovementRangeLeft => movementMaxRange - RangeUsedSum;
 
@@ -25,9 +29,12 @@ public abstract class Unit : MonoBehaviour
         else return null;
     } 
     public List<Cell> targetCells = new();
+
     private HashSet<Cell> inSquareRangeCells = new();
     private HashSet<Cell> inRangeCells = new();
-    public HashSet<Cell> inMovementRangeCells = new();
+    public HashSet<Cell> inMovementRangeCells => targetCells.Any() ? newMRC : defaultMRC;
+    private HashSet<Cell> defaultMRC = new();
+    private HashSet<Cell> newMRC = new();
     public LayerMask cellLayer;
     private InputManager InputManager => InputManager.theInputManager;
     private GridManager Grid => GridManager.theGridManager;
@@ -37,10 +44,30 @@ public abstract class Unit : MonoBehaviour
     public Cell TargetDestination() => pathFindCells.Any() ? pathFindCells.Last() : UnitOnCell();
     
     public Unit ChaseTarget;
-    
     public List<Vector3> pathFindV3 = new();
 
-    public LineRenderer lineRdr;
+    //ability
+    public List<Ability> abilities = new();
+    public Ability selectedAbility;
+    
+    [Header("Dash Properties")]
+    //public bool allowMovementAfterDash = false; //oz / kaigin???
+    //public bool allowChaseAfterDash = false; //most characters are viable for this
+    public bool isAirbourne;
+    public Cell dashTarget;
+    [SerializeField] private float dashSpeed = 15;
+    public int dashMaxRange = 14;
+    private HashSet<Cell> dashSquareRangeCells = new();
+    private HashSet<Cell> dashRangeCells = new();
+    public HashSet<Cell> dashableCells= new();
+    public List<Cell> dashPathFindCells = new();
+    public Cell DashTargetDestination() => dashPathFindCells.Any() ? dashPathFindCells.Last() : UnitOnCell();
+    public Cell MovementStartCell()
+    {
+        if(dashTarget == null) return UnitOnCell();
+        else return dashTarget; // instead of returning dash target we need to get the solved conflict ver
+    }
+    
 
     [Header("TileMap Properties")]
     public Tilemap tilemap;
@@ -71,7 +98,7 @@ public abstract class Unit : MonoBehaviour
         Cell start = UnitOnCell();
         var endCell = ChaseTarget.ChaseTarget == this? ChaseTarget.UnitOnCell() : ChaseTarget.TargetDestination(); 
         var end = new List<Cell>(){endCell};
-        PathRequestManager.thePathReqManager.RequestPathFindings(start, end, OnPathFound);
+        PathRequestManager.thePathReqManager.RequestPathFindings(start, end, false, false, OnPathFound);
 
         void OnPathFound(Cell[] _newPath, bool _pathSuccess)
         {
@@ -101,31 +128,21 @@ public abstract class Unit : MonoBehaviour
                 Debug.Log("chase path found");
                 rangeUsed.Add(pathFindCells[pathFindCells.Count - 1].gCost);
             }
-            
         }
     }
     protected virtual void Update()
     {
-        //Debug.Log($"{gameObject.name}:"+ inRangeCells.Count);
-       
         //temp
         if(Input.GetKeyDown(KeyCode.Z))
         {
-            if(ChaseTarget!=null && InputManager.SelectedPlayer == this)
-            ChaseDownTarget();
+            CheckDashableCells(); //check dash range
         }
 
         //If there is path to follow and all pathfind algorithm has finished processing
         if(!isFollowing && followReq.Any() && PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         StartCoroutine(StartFollowPath());
-
-        //get current cell unit is standing
-        // if(Physics.Raycast(transform.position, Vector3.down, out RaycastHit hit, 1, cellLayer))
-        // unitOnCell = hit.collider.GetComponent<Cell>();
-
-        DrawLineRndr();
     }
-    public void ClearAllInputs()
+    public virtual void ClearAllInputs()
     {
         targetCells.Clear();
         pathFindV3.Clear();
@@ -133,46 +150,40 @@ public abstract class Unit : MonoBehaviour
         rangeUsed.Clear();
 
         ChaseTarget = null;
-        ToggleOverlay(false);
+
+        dashPathFindCells.Clear();
     }
     public void EnqueueFollowPath()
     {
         if(pathFindCells.Any())
         {
-            Debug.Log("start follow");
-            followReq.Enqueue(FollowPath(pathFindCells));
+            followReq.Enqueue(FollowPath(pathFindCells, speed));
         }
     }
-    public void ToggleOverlay(bool _enable)
+    public void EnqueueDashPath()
     {
-        if(_enable)
+        if(dashPathFindCells.Any())
         {
-            tilemap.ClearAllTiles();
-
-            foreach(var c in inMovementRangeCells)
-            {
-                tilemap.SetTile(c.TileMapTilePos(), overlay);
-            }
-        }
-        else
-        {
-            tilemap.ClearAllTiles();
+            followReq.Enqueue(FollowPath(dashPathFindCells, dashSpeed));
         }
     }
 
-    public void GetInRangeCells()
+    public void GetInRangeCells(bool _dash = false)
     {
-        //Debug.Log("Get InRangeCells");
+        var squareRange = _dash? dashSquareRangeCells : inSquareRangeCells;
+        var inRange = _dash? dashRangeCells : inRangeCells;
+        var range = _dash? dashMaxRange : MovementRangeLeft;
+        
         //draw square around unit's grid
-        inRangeCells.Clear();
-        inSquareRangeCells.Clear();
+        inRange.Clear();
+        squareRange.Clear();
 
         //temporary solution, will break if player is able to back track to unitoncell
         UnitOnCell().gCost = 0;
         UnitOnCell().hCost = 0;
 
         int minX, maxX, minY, maxY;
-        int dist = Mathf.RoundToInt(MovementRangeLeft/10);
+        int dist = Mathf.RoundToInt(range/10);
 
         Cell start = targetCells.Any()? targetCells.Last() : UnitOnCell();
 
@@ -188,41 +199,45 @@ public abstract class Unit : MonoBehaviour
                 IntVector2 i = new(xval, yval);
                 try
                 {
-                    inSquareRangeCells.Add(Grid.cellDic[i]);
+                    squareRange.Add(Grid.cellDic[i]);
                 }
                 catch
                 {
                     continue;
                 }
-                
             }
         }
-        foreach(var c in inSquareRangeCells)
+        foreach(var c in squareRange)
         {
-            if(c.IsWithinRangeWithUnit(this))
+            if(c.IsWithinRangeWithUnit(this, _dash))
             {
-                inRangeCells.Add(c);
+                inRange.Add(c);
             }
         }
     }
-    public void CheckInMovementRange(bool _EnableOverlay)
+    public void CheckInMovementRange(bool _EnableOverlay, bool _dash = false)
     {
+        var squareRange = _dash? dashSquareRangeCells : inSquareRangeCells;
+        var inRange = _dash? dashRangeCells : inRangeCells;
+        var range = _dash? dashMaxRange : MovementRangeLeft;
+        var selectableCells = _dash? dashableCells : inMovementRangeCells;
+
         int cost;
-        inMovementRangeCells.Clear();
+        selectableCells.Clear();
         tilemap.ClearAllTiles();
-
-        GetInRangeCells();
-
-        //int i;
-        //for(i = 0; i < inRangeCells.Count;)
-        foreach(Cell c in inRangeCells) //try coroutine, dont iterate the loop until the callback has done (doesn't seem like timing issue)
+        GetInRangeCells(_dash);
+        
+        foreach(Cell c in inRange) //try coroutine, dont iterate the loop until the callback has done (doesn't seem like timing issue)
         {
-            //Cell c = inRangeCells.ToList()[i];
             cost = 1000 + movementMaxRange; //if pathfind failed, at least the cost would be too high to move to
             List<Cell> cs = new List<Cell>(){c};
+            Cell start;
 
-            Cell start = targetCells.Any()? targetCells.Last() : UnitOnCell(); //pathfind from target cell to current in range cell
-            PathRequestManager.thePathReqManager.RequestPathFindings(start, cs, AddToHashset); //makes sure the cell is reachable if there is obstacles
+            if(_dash == false) start = targetCells.Any()? targetCells.Last() : UnitOnCell(); //pathfind from target cell to current in range cell
+            else start =  UnitOnCell(); 
+
+            bool isAirb = _dash ? isAirbourne : false;
+            PathRequestManager.thePathReqManager.RequestPathFindings(start, cs, isAirb, _dash, AddToHashset); //makes sure the cell is reachable if there is obstacles
         }
         foreach(var c in inRangeCells)
         {
@@ -239,7 +254,7 @@ public abstract class Unit : MonoBehaviour
 
                 if(cost <= MovementRangeLeft)
                 {
-                   inMovementRangeCells.Add(lastCell);
+                   selectableCells.Add(lastCell);
 
                    //overlay
                    if(_EnableOverlay)
@@ -249,29 +264,9 @@ public abstract class Unit : MonoBehaviour
             else Debug.Log("path fail");
         }
     }
-    public void DrawLineRndr()
+    public virtual void CheckDashableCells()
     {
-        if(targetCells.Any())
-        {
-             //update line render here, draw line is in unit
-            lineRdr.enabled = true;
-            pathFindV3.RemoveAll(v3 => v3 == Vector3.zero); //for some reason is adding one extra slot per pathfiding
-            var vector3sa = pathFindV3.ToArray();
-        
-            lineRdr.positionCount = vector3sa.Length;
-            lineRdr.SetPositions(vector3sa);
-        }
-        else if(ChaseTarget != null)
-        {
-            lineRdr.enabled = true;
-            lineRdr.positionCount = 2;
-            lineRdr.SetPosition(0, UnitOnCell().ToWorldPos());
-            lineRdr.SetPosition(1, ChaseTarget.UnitOnCell().ToWorldPos());
-        }
-        else
-        {
-            lineRdr.enabled = false;
-        }
+        CheckInMovementRange(true, true);
     }
    
     private IEnumerator StartFollowPath()
@@ -286,7 +281,7 @@ public abstract class Unit : MonoBehaviour
         isFollowing = false;
     }
    
-    protected virtual IEnumerator FollowPath(List<Cell> _pathToFollow)
+    protected virtual IEnumerator FollowPath(List<Cell> _pathToFollow, float _followSpeed) 
     {
         Vector3 offset = Vector3.up * GridManager.theGridManager.cellSize/2;
         //if there is no path to follow, break
@@ -311,7 +306,7 @@ public abstract class Unit : MonoBehaviour
 
                 currentWayPoint = _pathToFollow[targetIndex];
             }
-            transform.position = Vector3.MoveTowards(transform.position, currentWayPoint.ToWorldPos() + offset, speed * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(transform.position, currentWayPoint.ToWorldPos() + offset, _followSpeed * Time.deltaTime);
             yield return null;
         }
     }
