@@ -2,13 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
+using UnityEngine.EventSystems;
 
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 [ExecuteAlways]
 [System.Serializable]
-public class Cell : MonoBehaviour, IHeapItem<Cell>
+public class Cell : MonoBehaviour, IHeapItem<Cell>, IPointerClickHandler
 {
     public IntVector2 coord;
     public TileType tileType;
@@ -116,22 +117,26 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
             }
         }
     }
-   
-    private void OnMouseDown()
+    public void OnPointerClick(PointerEventData eventData)
     {
+        if (eventData.button != PointerEventData.InputButton.Left) return;
         ChoiceModeStateMachine();
     }
+    // private void OnMouseDown()
+    // {
+    //     ChoiceModeStateMachine();
+    // }
     private void ChoiceModeStateMachine()
     {
         var SelectedPlayer = Input.SelectedPlayer;
-        switch(Input.currentChoiceMode)
+        switch(SelectedPlayer.selectedAbility)
         {
-            case InputManager.ChoiceMode.move:
+            default:
                 if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer) && PathReqManager.AlreadyFinishedProcessing())
                 {
                     if(SelectedPlayer.UnitOnCell() == this) return;
                     if(SelectedPlayer.ChaseTarget != null) return; //if selected player has a chase target, dont add this cell
-                    if(SelectedPlayer.dashTarget != null)return;
+                    if(SelectedPlayer.selectedAbility is Ability_Dash abd && abd.dashTarget != null)return;
 
                     var targetCells = SelectedPlayer.targetCells;
 
@@ -153,19 +158,16 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
                 
             break;
 
-            case InputManager.ChoiceMode.chase:
-            break;
+            case Ability ab when ab is Ability_Dash abd:
+                if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer, true) && PathReqManager.AlreadyFinishedProcessing())
+                {
+                    if(SelectedPlayer.ChaseTarget != null) SelectedPlayer.ChaseTarget = null;
+                    if(abd.dashTarget == this) return;
 
-            case InputManager.ChoiceMode.dash:
-            if(SelectedPlayer != null && IsWithinMovementRange(SelectedPlayer, true) && PathReqManager.AlreadyFinishedProcessing())
-            {
-                if(SelectedPlayer.ChaseTarget != null) SelectedPlayer.ChaseTarget = null;
-                if(SelectedPlayer.dashTarget == this) return;
-
-                SelectedPlayer.dashTarget = this;
-                List<Cell> end = new(){SelectedPlayer.dashTarget};
-                PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), end, SelectedPlayer.isAirbourne, true, OnDashPathFound);
-            }
+                    abd.dashTarget = this;
+                    List<Cell> end = new(){abd.dashTarget};
+                    PathRequestManager.thePathReqManager.RequestPathFindings(SelectedPlayer.UnitOnCell(), end, abd.isAirbourne, true, OnDashPathFound);
+                }
             break;
         }
         void OnPathFound(Cell[] _newPath, bool _pathSuccess)
@@ -210,12 +212,12 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         Input.SelectedPlayer.lineRdr.enabled = false;
     }
     
-    public bool IsWithinRangeWithUnit(Unit _inspectedUnit, bool _dash = false)
+    public bool IsWithinRangeWithUnit(Unit _inspectedUnit, Ability_Dash _dash = null)
     {
         List<Cell> targetCells = _inspectedUnit.targetCells;
         
         Cell startCell;
-        if(_dash == false)
+        if(_dash == null)
         {
             startCell = targetCells.Count > 0? targetCells[targetCells.Count -1] : _inspectedUnit.UnitOnCell();
             return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.MovementRangeLeft;
@@ -223,7 +225,7 @@ public class Cell : MonoBehaviour, IHeapItem<Cell>
         else
         {
             startCell = _inspectedUnit.UnitOnCell();
-            return PathReqManager.pathFind.GetDistance(startCell, this) <= _inspectedUnit.dashMaxRange;
+            return PathReqManager.pathFind.GetDistance(startCell, this) <= _dash.dashMaxRange;
         }
     } 
     public bool IsWithinMovementRange(Unit _inspectedUnit, bool _dash = false)

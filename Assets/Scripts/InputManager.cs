@@ -41,11 +41,34 @@ public class InputManager : MonoBehaviour
             //bar.rectTransform.localScale = new Vector3(x, 1, 1);
             barText.text = $"{SelectedPlayer.currentHealth}/{SelectedPlayer.maxHealth}";
         }
+        //test
+        if(Input.GetKeyDown(KeyCode.B) && SelectedPlayer.selectedAbility is Ability_Dash ad)
+        {
+            Debug.Log("its a dash");
+            SelectedPlayer.CheckDashableCells(ad);
+        }
         
     }
     ChoiceMode ChoiceModeState()
     {
-        if(SelectedPlayer.dashSelected)
+        switch(SelectedPlayer.selectedAbility)
+        {
+            case Ability ab when ab is Ability_Prep:
+            break;
+
+            case Ability ab when ab is Ability_Dash:
+                return ChoiceMode.dash;
+            break;
+
+            case Ability ab when ab is Ability_Blast:
+            break;
+
+            default:
+                if(Input.GetKey(KeyCode.LeftShift)){return ChoiceMode.chase;}
+                else return ChoiceMode.move;
+            break;
+        }
+        if(SelectedPlayer.selectedAbility is Ability_Dash)
         {
            return ChoiceMode.dash;
         }
@@ -61,18 +84,23 @@ public class InputManager : MonoBehaviour
         if(Input.GetKeyDown(KeyCode.Mouse1) && PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         {
             if(SelectedPlayer == null) return;
+            
+            //clears selected ability
+            if(SelectedPlayer.selectedAbility != null) {SelectedPlayer.selectedAbility.ExitAbility(SelectedPlayer); return;}
 
             //if target cells exist. overlay defaultMRC
             if(SelectedPlayer.targetCells.Any() || SelectedPlayer.ChaseTarget != null)
             {
                 SelectedPlayer.ClearAllInputs();
                 SelectedPlayer.ToggleOverlay(true);
+                return;
             }
             //if target cells are cleared, deselect player
             else if (SelectedPlayer.targetCells.Count == 0 || SelectedPlayer.ChaseTarget == null)
             {
                 SelectedPlayer.ToggleOverlay(false);
                 SelectedPlayer = null;
+                return;
             }
         }
 

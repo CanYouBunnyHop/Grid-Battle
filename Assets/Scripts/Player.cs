@@ -2,24 +2,22 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using UnityEngine.Tilemaps;
+using UnityEngine.EventSystems;
 
-public class Player : Unit
+public class Player : Unit, IPointerClickHandler
 {
     [Header("Player Exclusive Properties")]
     public LineRenderer lineRdr;
     public Sprite portrait;
-
-    //abilities
-    public bool dashSelected = false; // when dash ability is selected
     
     protected override void Update()
     {
         base.Update();
         DrawLineRndr();
     }
-    public override void OnMouseDown()
+    public override void OnPointerClick(PointerEventData eventData)
     {
+        if (eventData.button != PointerEventData.InputButton.Left) return;
         if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         {
             if(InputManager.theInputManager.currentChoiceMode is InputManager.ChoiceMode.chase)
@@ -30,10 +28,32 @@ public class Player : Unit
             {
                 InputManager.theInputManager.SelectedPlayer = this;
                 AbilityUIManager.theAbilityUIManager.UpdatesAbilityUI();
+
+                if(InputManager.theInputManager.SelectedPlayer.selectedAbility is Ability_Dash abd)
+                {
+                    CheckDashableCells(abd);
+                }
+                else
                 CheckInMovementRange(true);
             }
         }
     }
+    // public override void OnMouseDown()
+    // {
+    //     if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
+    //     {
+    //         if(InputManager.theInputManager.currentChoiceMode is InputManager.ChoiceMode.chase)
+    //         {
+    //             IsSelectedAsChaseTarget();
+    //         } 
+    //         else
+    //         {
+    //             InputManager.theInputManager.SelectedPlayer = this;
+    //             AbilityUIManager.theAbilityUIManager.UpdatesAbilityUI();
+    //             CheckInMovementRange(true);
+    //         }
+    //     }
+    // }
     // protected override IEnumerator FollowPath(List<Cell> _path)
     // {
     //     yield return base.FollowPath(_path);
@@ -52,8 +72,7 @@ public class Player : Unit
             lineRdr.positionCount = vector3sa.Length;
             lineRdr.SetPositions(vector3sa);
 
-            Material m = dashTarget != null? StaticData.lineMats[1] : StaticData.lineMats[0];
-            lineRdr.material = m;
+            LineRendererProperties();
         }
         else if(ChaseTarget != null)
         {
@@ -69,9 +88,23 @@ public class Player : Unit
     }
     private void LineRendererProperties()
     {
-        Material m = dashTarget != null? StaticData.lineMats[1] : StaticData.lineMats[0];
-        float lineThickness; //0.2 for arrowed, 0.1 for default
-        //lineRdr.widthMultiplier
+        Material m;
+        float lineThickness;
+        //default
+        //Chase
+        //Dash
+        if(selectedAbility is Ability_Dash abd && abd.dashTarget != null)
+        {
+           m = StaticData.lineMats[1];
+           lineThickness = 0.4f;
+        }
+        else
+        {
+            m = StaticData.lineMats[0];
+            lineThickness = 0.2f;
+        }
+        lineRdr.widthMultiplier = lineThickness;
+        lineRdr.material = m;
     }
     public void ToggleOverlay(bool _enable)
     {
@@ -94,4 +127,6 @@ public class Player : Unit
         base.ClearAllInputs();
         ToggleOverlay(false);
     }
+
+    
 }

@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using UnityEngine.Tilemaps;
+using UnityEngine.EventSystems;
 
-public abstract class Unit : MonoBehaviour
+public abstract class Unit : MonoBehaviour, IPointerClickHandler
 {
     [Header("Gameplay Settings")]
     public float maxHealth;
@@ -53,33 +54,41 @@ public abstract class Unit : MonoBehaviour
     [Header("Dash Properties")]
     //public bool allowMovementAfterDash = false; //oz / kaigin???
     //public bool allowChaseAfterDash = false; //most characters are viable for this
-    public bool isAirbourne;
-    public Cell dashTarget;
+    //public bool isAirbourne;
+    //public Cell dashTarget;
     [SerializeField] private float dashSpeed = 15;
-    public int dashMaxRange = 14;
+    //public int dashMaxRange = 14;
     private HashSet<Cell> dashSquareRangeCells = new();
     private HashSet<Cell> dashRangeCells = new();
     public HashSet<Cell> dashableCells= new();
     public List<Cell> dashPathFindCells = new();
     public Cell DashTargetDestination() => dashPathFindCells.Any() ? dashPathFindCells.Last() : UnitOnCell();
-    public Cell MovementStartCell()
-    {
-        if(dashTarget == null) return UnitOnCell();
-        else return dashTarget; // instead of returning dash target we need to get the solved conflict ver
-    }
+    // public Cell MovementStartCell()
+    // {
+    //     if(dashTarget == null) return UnitOnCell();
+    //     else return dashTarget; // instead of returning dash target we need to get the solved conflict ver
+    // }
     
 
     [Header("TileMap Properties")]
     public Tilemap tilemap;
     public TileBase overlay;
 
-    public virtual void OnMouseDown() //mouse down on unit
+    public virtual void OnPointerClick(PointerEventData eventData)
     {
+        if (eventData.button != PointerEventData.InputButton.Left) return;
         if(PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         {
-           IsSelectedAsChaseTarget();
+           if(InputManager.theInputManager.currentChoiceMode is InputManager.ChoiceMode.chase)
+            {
+                IsSelectedAsChaseTarget();
+            } 
         }
     }
+    // public virtual void OnMouseDown() //mouse down on unit
+    // {
+        
+    // }
     protected void IsSelectedAsChaseTarget()
     {
         if(Input.GetKey(KeyCode.LeftShift))
@@ -132,12 +141,6 @@ public abstract class Unit : MonoBehaviour
     }
     protected virtual void Update()
     {
-        //temp
-        if(Input.GetKeyDown(KeyCode.Z))
-        {
-            CheckDashableCells(); //check dash range
-        }
-
         //If there is path to follow and all pathfind algorithm has finished processing
         if(!isFollowing && followReq.Any() && PathRequestManager.thePathReqManager.AlreadyFinishedProcessing())
         StartCoroutine(StartFollowPath());
@@ -150,9 +153,19 @@ public abstract class Unit : MonoBehaviour
         rangeUsed.Clear();
 
         ChaseTarget = null;
-
         dashPathFindCells.Clear();
+
+        if(selectedAbility)
+        selectedAbility.ClearAbilityInputs();
     }
+    // public virtual void ClearMovementInputs()
+    // {
+    //     targetCells.Clear();
+    //     pathFindV3.Clear();
+    //     pathFindCells.Clear();
+    //     rangeUsed.Clear();
+
+    // }
     public void EnqueueFollowPath()
     {
         if(pathFindCells.Any())
@@ -168,11 +181,11 @@ public abstract class Unit : MonoBehaviour
         }
     }
 
-    public void GetInRangeCells(bool _dash = false)
+    public void GetInRangeCells(Ability_Dash _dash = null)
     {
         var squareRange = _dash? dashSquareRangeCells : inSquareRangeCells;
         var inRange = _dash? dashRangeCells : inRangeCells;
-        var range = _dash? dashMaxRange : MovementRangeLeft;
+        var range = _dash? _dash.dashMaxRange : MovementRangeLeft;
         
         //draw square around unit's grid
         inRange.Clear();
@@ -215,12 +228,12 @@ public abstract class Unit : MonoBehaviour
             }
         }
     }
-    public void CheckInMovementRange(bool _EnableOverlay, bool _dash = false)
+    public void CheckInMovementRange(bool _EnableOverlay, Ability_Dash _dash = null)
     {
-        var squareRange = _dash? dashSquareRangeCells : inSquareRangeCells;
-        var inRange = _dash? dashRangeCells : inRangeCells;
-        var range = _dash? dashMaxRange : MovementRangeLeft;
-        var selectableCells = _dash? dashableCells : inMovementRangeCells;
+        var squareRange = _dash != null? dashSquareRangeCells : inSquareRangeCells;
+        var inRange = _dash != null? dashRangeCells : inRangeCells;
+        var range = _dash != null? _dash.dashMaxRange : MovementRangeLeft;
+        var selectableCells = _dash != null? dashableCells : inMovementRangeCells;
 
         int cost;
         selectableCells.Clear();
@@ -229,14 +242,14 @@ public abstract class Unit : MonoBehaviour
         
         foreach(Cell c in inRange) //try coroutine, dont iterate the loop until the callback has done (doesn't seem like timing issue)
         {
-            cost = 1000 + movementMaxRange; //if pathfind failed, at least the cost would be too high to move to
+            cost = 10000; //if pathfind failed, at least the cost would be too high to move to
             List<Cell> cs = new List<Cell>(){c};
             Cell start;
 
             if(_dash == false) start = targetCells.Any()? targetCells.Last() : UnitOnCell(); //pathfind from target cell to current in range cell
             else start =  UnitOnCell(); 
 
-            bool isAirb = _dash ? isAirbourne : false;
+            bool isAirb = _dash ? _dash.isAirbourne : false;
             PathRequestManager.thePathReqManager.RequestPathFindings(start, cs, isAirb, _dash, AddToHashset); //makes sure the cell is reachable if there is obstacles
         }
         foreach(var c in inRangeCells)
@@ -264,9 +277,9 @@ public abstract class Unit : MonoBehaviour
             else Debug.Log("path fail");
         }
     }
-    public virtual void CheckDashableCells()
+    public virtual void CheckDashableCells(Ability_Dash _dash)
     {
-        CheckInMovementRange(true, true);
+        CheckInMovementRange(true, _dash);
     }
    
     private IEnumerator StartFollowPath()
