@@ -15,7 +15,9 @@ public class PolygonGenerator : MonoBehaviour
     //public bool isFilled;
     public int polygonSides;
     public float polygonRadius;
-    public float centerRadius;
+    //public float centerRadius;
+    [Range(0f, 360f)]
+    public float angle;
     
     void Start()
     {
@@ -91,13 +93,14 @@ public class PolygonGenerator : MonoBehaviour
     {
         List<Vector3> points = new List<Vector3>();
         float circumferenceProgressPerStep = (float)1/sides;
-        float TAU = 2*Mathf.PI;
+        float TAU = angle*Mathf.Deg2Rad;//2*Mathf.PI;
         float radianProgressPerStep = circumferenceProgressPerStep*TAU;
         
-        for(int i = 0; i<sides; i++)
+        points.Add(Vector3.zero);
+        for(int i = 0; i<sides + 1; i++)
         {
             float currentRadian = radianProgressPerStep*i;
-            points.Add(new Vector3(Mathf.Cos(currentRadian)*radius, Mathf.Sin(currentRadian)*radius,0));
+            points.Add(new Vector3(Mathf.Cos(currentRadian)*radius, Mathf.Sin(currentRadian)*radius,0)); //this puts points on a circle
         }
         return points;
     }

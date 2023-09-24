@@ -47028,8 +47028,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   polygonPoints: []
   polygonTriangles: 
-  polygonSides: 0
-  polygonRadius: 0
+  polygonSides: 5
+  polygonRadius: 1
   centerRadius: 0
 --- !u!33 &1992772670
 MeshFilter:
@@ -47059,7 +47059,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 10754, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -47088,14 +47088,14 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1992772667}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
   m_LocalPosition: {x: -0.04810117, y: 0.6667059, z: -0.051138774}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 11
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
 --- !u!1 &2004331033
 GameObject:
   m_ObjectHideFlags: 0
